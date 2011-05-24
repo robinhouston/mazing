@@ -98,12 +98,12 @@ inline static int max(int x, int y)
     return x < y ? y : x;
 }
 
-void matrix_bareiss(matrix_t *m)
+void matrix_count_trees(matrix_t *m, int start_node, int end_node)
 {
     int n = m->n;
     mpz_t *mkk=0, *mkk_prev;
     
-    for (int k=0; k < n - 1; k++)
+    for (int k=start_node; k < end_node - 1; k++)
     {
         mkk_prev = mkk;
         mkk = ent(m,k,k);
@@ -127,7 +127,7 @@ void matrix_bareiss(matrix_t *m)
 matrix_t *maze_matrix(int width, int height)
 {
     matrix_t *m = initial_maze_matrix(width, height);
-    matrix_bareiss(m);
+    matrix_count_trees(m, 0, m->n);
     return m;
 }
 
