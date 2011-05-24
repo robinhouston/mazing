@@ -81,18 +81,27 @@ matrix_t *maze_matrix(int width, int height)
     return m;
 }
 
+inline static mpz_t *ent_r(row_t *row, int j)
+{
+    return &row->entries[j - row->offset];
+}
 inline static mpz_t *ent(matrix_t *m, int i, int j)
 {
     row_t *row = m->rows[i];
     if (j < row->offset)
         return &m->zero;
-    return &row->entries[j - row->offset];
+    return ent_r(row, j);
+}
+
+inline static int max(int x, int y)
+{
+    return x < y ? y : x;
 }
 
 void matrix_bareiss(matrix_t *m)
 {
     int n = m->n;
-    mpz_t *mkk=0, *mkk_prev, *mik, *mjk, *mij;
+    mpz_t *mkk=0, *mkk_prev;
     
     for (int k=0; k < n - 1; k++)
     {
@@ -100,11 +109,12 @@ void matrix_bareiss(matrix_t *m)
         mkk = ent(m,k,k);
         for (int i = k+1; i < n; i++)
         {
-            mik = ent(m,i,k);
-            for (int j = k+1; j <= i; j++)
+            row_t *row_i = m->rows[i];
+            mpz_t *mik = ent(m,i,k);
+            for (int j = max(k+1, row_i->offset); j <= i; j++)
             {
-                mjk = ent(m,j,k);
-                mij = ent(m,i,j);
+                mpz_t *mjk = ent(m,j,k);
+                mpz_t *mij = ent_r(row_i,j);
                 
                 mpz_mul(*mij, *mij, *mkk);
                 mpz_submul(*mij, *mik, *mjk);
