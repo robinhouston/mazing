@@ -13,6 +13,4 @@ typedef struct {
 
 matrix_t *maze_matrix(int width, int height);
 void matrix_free(matrix_t *m);
-
-void matrix_bareiss(matrix_t *m);
-void matrix_print_det(FILE *out, matrix_t *m);
+mpz_t *maze_count(matrix_t *m);

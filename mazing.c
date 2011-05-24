@@ -53,7 +53,7 @@ void matrix_free(matrix_t *m)
     free(m);
 }
 
-matrix_t *maze_matrix(int width, int height)
+matrix_t *initial_maze_matrix(int width, int height)
 {
     int n = width * height;
     matrix_t *m = matrix_init(n, width + 1);
@@ -124,9 +124,15 @@ void matrix_bareiss(matrix_t *m)
     }
 }
 
-void matrix_print_det(FILE *out, matrix_t *m)
+matrix_t *maze_matrix(int width, int height)
 {
-    int last = m->n - 2;
-    mpz_t *x = ent(m,last,last);
-    mpz_out_str(out, 10, *x);
+    matrix_t *m = initial_maze_matrix(width, height);
+    matrix_bareiss(m);
+    return m;
+}
+
+mpz_t *maze_count(matrix_t *m)
+{
+    int x = m->n - 2;
+    return ent(m, x, x);
 }

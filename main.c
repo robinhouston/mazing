@@ -20,10 +20,9 @@ int main(int argc, char **argv)
     height = atoi(argv[2]);
     
     m = maze_matrix(width, height);
-    matrix_bareiss(m);
     
-    matrix_print_det(stdout, m);
-    printf("\n");
+    gmp_printf("There are %Zd different mazes on a %dx%d grid.\n",
+        maze_count(m), width, height);
     
     matrix_free(m);
     return 0;
