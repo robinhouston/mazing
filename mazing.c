@@ -93,6 +93,10 @@ inline static mpz_t *ent(matrix_t *m, int i, int j)
     return ent_r(row, j);
 }
 
+inline static int min(int x, int y)
+{
+    return x < y ? x : y;
+}
 inline static int max(int x, int y)
 {
     return x < y ? y : x;
@@ -100,14 +104,14 @@ inline static int max(int x, int y)
 
 void matrix_count_trees(matrix_t *m, int start_node, int end_node)
 {
-    int n = m->n;
+    int n = m->n, w = m->w;
     mpz_t *mkk=0, *mkk_prev;
     
     for (int k=start_node; k < end_node - 1; k++)
     {
         mkk_prev = mkk;
         mkk = ent(m,k,k);
-        for (int i = k+1; i < n; i++)
+        for (int i = k+1; i < min(n, k+w); i++)
         {
             row_t *row_i = m->rows[i];
             mpz_t *mik = ent(m,i,k);
@@ -119,6 +123,15 @@ void matrix_count_trees(matrix_t *m, int start_node, int end_node)
                 mpz_mul(*mij, *mij, *mkk);
                 mpz_submul(*mij, *mik, *mjk);
                 if (k > 0) mpz_divexact(*mij, *mij, *mkk_prev);
+            }
+        }
+        if (k+w < n) {
+            int i = k+w;
+            row_t *row_i = m->rows[i];
+            for (int j = max(k+1, row_i->offset); j <= i; j++)
+            {
+                mpz_t *mij = ent_r(row_i,j);
+                mpz_mul(*mij, *mij, *mkk);
             }
         }
     }
