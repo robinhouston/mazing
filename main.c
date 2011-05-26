@@ -4,26 +4,61 @@
 #include <gmp.h>
 
 #include "mazing.h"
+#include "fmc.h"
+
+void print_count(int width, int height)
+{
+    mpz_t count;
+    
+    mpz_init(count);
+    fmc(&count, width, height);
+    
+    gmp_printf("There are %Zd different mazes on a %dx%d grid.\n",
+        count, width, height);
+    
+    mpz_clear(count);
+}
+
+void print_maze(int width, int height, mpz_t index)
+{
+    maze_t *maze = maze_by_index(width, height, index);
+    
+    // XXXX
+    
+    maze_free(maze);
+}
 
 int main(int argc, char **argv)
 {
     int width, height;
-    matrix_t *m;
+    mpz_t index;
     
-    if (argc != 3)
+    if (argc < 3 || argc > 4)
     {
-        fprintf(stderr, "Usage: %s width height\n", argv[0]);
+        fprintf(stderr, "Usage: %s width height [index]\n", argv[0]);
         return EX_USAGE;
     }
     
     width = atoi(argv[1]);
     height = atoi(argv[2]);
     
-    m = maze_matrix(width, height);
+    if (width <= 0 || height <= 0)
+    {
+        fprintf(stderr, "Usage: %s width height [index]\n", argv[0]);
+        fprintf(stderr, "width and height must be positive\n");
+        return EX_USAGE;
+    }
     
-    gmp_printf("There are %Zd different mazes on a %dx%d grid.\n",
-        maze_count(m), width, height);
+    if (argc == 3)
+    {
+        print_count(width, height);
+        return 0;
+    }
     
-    matrix_free(m);
+    /* Construct a maze by index */
+    mpz_init(index);
+    gmp_sscanf(argv[3], "%Zd", &index);
+    print_maze(width, height, index);
+    mpz_clear(index);
     return 0;
 }

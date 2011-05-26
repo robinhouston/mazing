@@ -1,7 +1,7 @@
 CFLAGS=-Wall -std=c99 -O2
 LIBS=-lgmp
 
-mazing: main.c mazing.o
+mazing: main.c fmc.o mazing.o
 	$(CC) $(CFLAGS) -o mazing $^ $(LIBS)
 
 .PHONY: clean
