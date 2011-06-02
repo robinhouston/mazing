@@ -11,6 +11,17 @@ typedef struct {
     row_t *rows[];
 } matrix_t;
 
-matrix_t *maze_matrix(int width, int height);
-void matrix_free(matrix_t *m);
-mpz_t *maze_count(matrix_t *m);
+typedef char direction;
+#define DIR_N 0x1
+#define DIR_E 0x2
+#define DIR_S 0x4
+#define DIR_W 0x8
+
+typedef struct {
+    int width;
+    int height;
+    direction conn[]; /* has (width * height) elements */
+} maze_t;
+
+maze_t *maze_by_index(int width, int height, mpz_t index);
+void maze_free(maze_t *maze);

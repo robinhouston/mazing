@@ -1,4 +1,4 @@
-CFLAGS=-Wall -std=c99 -O2
+CFLAGS=-Wall -std=c99 -g
 LIBS=-lgmp
 
 mazing: main.c fmc.o mazing.o
