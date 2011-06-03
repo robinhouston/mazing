@@ -25,3 +25,4 @@ typedef struct {
 
 maze_t *maze_by_index(int width, int height, mpz_t index);
 void maze_free(maze_t *maze);
+void test();
