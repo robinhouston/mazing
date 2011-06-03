@@ -5,18 +5,12 @@
 #include <gmp.h>
 #include "fmc.h"
 
-typedef struct {
-    int n;
-    mpz_t entries[];
-} fmc_matrix;
+/** Small helper functions **/
 
 /* The nth triangular number */
 inline static int tri(int n)
 {
-    if (n % 2)
-        return n * ((n+1) >> 1);
-    else
-        return (n>>1) * (n+1);
+    return n * (n+1) / 2;
 }
 
 /* The largest power of two less than or equal to n */
@@ -27,6 +21,17 @@ inline static int msb(int n)
     return p >> 1;
 }
 
+
+/** Matrices **/
+
+/* A symmetric matrix of integers.
+The (i,j)th entry of m, where i >= j, is stored in m->entries[tri(i) + j] */
+typedef struct {
+    int n;
+    mpz_t entries[];
+} fmc_matrix;
+
+/* Allocate an 'n'x'n' zero matrix. */
 static fmc_matrix *fmc_matrix_init(int n)
 {
     int num_ents = tri(n);
@@ -38,6 +43,7 @@ static fmc_matrix *fmc_matrix_init(int n)
     return m;
 }
 
+/* Free the matrix. */
 static void fmc_matrix_free(fmc_matrix *m)
 {
     int num_ents = tri(m->n);
@@ -49,9 +55,7 @@ static void fmc_matrix_free(fmc_matrix *m)
 inline static mpz_t *ent(fmc_matrix *m, int i, int j)
 {
     if (i < j) {
-        int x = i;
-        i = j;
-        j = x;
+        int x = i; i = j; j = x;
     }
     
     return &m->entries[tri(i) + j];
@@ -73,6 +77,7 @@ static void fmc_matrix_print(FILE *out, char *name, fmc_matrix *m)
 }
 */
 
+/* Copy the contents of one matrix over another. */
 static void fmc_matrix_set(fmc_matrix *dest, fmc_matrix *src)
 {
     int n = tri(src->n);
@@ -80,6 +85,7 @@ static void fmc_matrix_set(fmc_matrix *dest, fmc_matrix *src)
         mpz_set(dest->entries[i], src->entries[i]);
 }
 
+/* result := result - other */
 static void fmc_matrix_sub(fmc_matrix *result, fmc_matrix *other)
 {
     int n = tri(result->n);
@@ -87,6 +93,7 @@ static void fmc_matrix_sub(fmc_matrix *result, fmc_matrix *other)
         mpz_sub(result->entries[i], result->entries[i], other->entries[i]);
 }
 
+/* dest := ma x mb */
 static void fmc_matrix_mul(fmc_matrix *dest, fmc_matrix *ma, fmc_matrix *mb)
 {
     int n = dest->n;
@@ -102,7 +109,13 @@ static void fmc_matrix_mul(fmc_matrix *dest, fmc_matrix *ma, fmc_matrix *mb)
     }
 }
 
-/* Assumes dest != src */
+/* Multiply 'src' by the tridiagonal matrix that has 4 down the main diagonal
+and -1 immediately above and below, and stores the result in 'dest'.
+
+("mobfi" stands for "minus-one-bordered four-times-identity".)
+
+Assumes dest != src.
+*/
 static void fmc_matrix_mul_mobfi(fmc_matrix *dest, fmc_matrix *src)
 {
     int n = dest->n;
@@ -121,6 +134,7 @@ static void fmc_matrix_mul_mobfi(fmc_matrix *dest, fmc_matrix *src)
     }
 }
 
+/* Perform the Bareiss algorithm. */
 static void bareiss(fmc_matrix *m)
 {
     int n = m->n;
@@ -147,14 +161,20 @@ static void bareiss(fmc_matrix *m)
     }
 }
 
-inline static void swizzle(fmc_matrix **x, fmc_matrix **y)
+/* Swap two matrix pointers */
+inline static void swap(fmc_matrix **x, fmc_matrix **y)
 {
-    fmc_matrix *t = *x;
-    *x = *y;
-    *y = t;
+    fmc_matrix *t = *x; *x = *y; *y = t;
 }
 
-fmc_matrix *dmf(int width, int height)
+/* The determinant of the block matrix that represents
+the planar dual of the 'width'x'height' grid. 
+
+Because this block matrix has a very simple structure,
+we can compute its determinant very efficiently by
+expressing the determinant as a recurrence and then
+*/
+static fmc_matrix *dmf(int width, int height)
 {
     int n = width - 1;
     
@@ -184,8 +204,8 @@ fmc_matrix *dmf(int width, int height)
         fmc_matrix_mul(temp, a, b);
         fmc_matrix_sub(new_b, temp);
         
-        swizzle(&a, &new_a);
-        swizzle(&b, &new_b);
+        swap(&a, &new_a);
+        swap(&b, &new_b);
         
         if ((height & bit) > 0)
         {
@@ -193,8 +213,8 @@ fmc_matrix *dmf(int width, int height)
             fmc_matrix_set(new_a, b);
             fmc_matrix_mul_mobfi(new_b, b);
             fmc_matrix_sub(new_b, a);
-            swizzle(&a, &new_a);
-            swizzle(&b, &new_b);
+            swap(&a, &new_a);
+            swap(&b, &new_b);
         }
         
         /* c := bM - a */
@@ -210,6 +230,11 @@ fmc_matrix *dmf(int width, int height)
     return b;
 }
 
+/* Fast Maze Counter.
+
+Count the number of mazes on a 'width'x'height grid,
+and store the result in 'out'.
+*/
 void fmc(mpz_t *out, int width, int height)
 {
     fmc_matrix *m = dmf(width, height);
