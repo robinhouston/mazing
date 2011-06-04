@@ -477,13 +477,15 @@ maze_t *maze_by_index(int width, int height, mpz_t index_in)
             }
         }
     }
-    if (mpz_cmp_ui(index, 0) != 0)
-    {
-        return 0;
+
+    matrix_free(m);
+    chain_free(node_chain);
+    
+    if (mpz_cmp_ui(index, 0) != 0) {
+        mpz_clear(index);
+        return 0; /* Index out of range */
     }
     
-    matrix_free(m);
     mpz_clear(index);
-    chain_free(node_chain);
     return maze;
 }
