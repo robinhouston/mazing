@@ -252,7 +252,7 @@ unnecessary calculations with two tricks:
 
 */
 
-/* Compute the Bareiss matrix, initially */
+/* Compute the Bareiss matrix from scratch */
 static void det_init(matrix_t *m)
 {
     int n = m->nr, w = m->w;
@@ -305,6 +305,9 @@ static void det_init(matrix_t *m)
     m->min_changed = m->n;
 }
 
+/* Record the fact that entry (i,j) of 'm' has changed.
+You need to do this whenever an entry changes, if you intend
+to use det_update. */
 inline static void det_changed(matrix_t *m, int i, int j)
 {
     int x = min(i,j);
@@ -314,12 +317,15 @@ inline static void det_changed(matrix_t *m, int i, int j)
 /* Update the Bareiss matrix to account for changes to the underlying matrix */
 static void det_update(matrix_t *m)
 {
+    /* Copy the original values over, for the changed part */ 
     for (int i = m->min_changed; i < m->nr; i++)
         for (int j = m->min_changed; j <= i; j++) {
             ent_t *e = ent(m,i,j);
             mpz_set(e->bv, e->ov);
         }
     
+    /* Multiply up, to account for the effect of the region that is
+       not connected to the changed part */
     ent_t *mkk_prev;
     if (m->min_changed >= m->w)
     {
@@ -338,6 +344,7 @@ static void det_update(matrix_t *m)
     else
         mkk_prev = 0;
     
+    /* Now run the Bareiss algorithm over the changed part */
     for (int k = max(m->det_start, m->min_changed - m->w); k < m->nr; k++)
     {
         ent_t *mkk = ent(m,k,k);
@@ -357,7 +364,7 @@ static void det_update(matrix_t *m)
         mkk_prev = mkk;
     }
     
-    /* Nothing has changed since we last recalculated */
+    /* Nothing has changed since we last recalculated, since we only just recalculated */
     m->min_changed = m->n;
 }
 
