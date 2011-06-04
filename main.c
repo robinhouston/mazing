@@ -13,8 +13,12 @@ void print_count(int width, int height)
     mpz_init(count);
     fmc(&count, width, height);
     
-    gmp_printf("There are %Zd different mazes on a %dx%d grid.\n",
-        count, width, height);
+    size_t optimal_bits = mpz_sizeinbase(count, 2);
+    int naive_bits = (width-1)*height + width*(height-1); /* i.e. using 1 bit per edge of the graph */
+    
+    gmp_printf("There are %Zd different mazes on a %dx%d grid. "
+               "That’s a %zd-bit number, compared with %d bits for a naive packing, a saving of %.2f%%.\n",
+        count, width, height, optimal_bits, naive_bits, 100.0 * (1.0 - (float) optimal_bits / naive_bits));
     
     mpz_clear(count);
 }
