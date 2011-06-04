@@ -381,7 +381,6 @@ static bool try_edge(matrix_t *m, mpz_t *index, int *node_chain,
         swap_ints(&to_cell, &from_cell);
     }
     
-    ent_t *m_ii = ent(m, n_i, n_i);
     ent_t *m_ij = ent(m, n_i, n_j);
     
     if (mpz_cmp_ui(m_ij->ov, 0) >= 0)
@@ -390,6 +389,7 @@ static bool try_edge(matrix_t *m, mpz_t *index, int *node_chain,
         return false;
     }
     
+    ent_t *m_ii = ent(m, n_i, n_i);
     ent_t *m_jj = ent(m, n_j, n_j);
     mpz_t *count_wo_edge = &ent(m, m->nr - 1, m->nr - 1)->bv;
     
