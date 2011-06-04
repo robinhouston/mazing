@@ -22,9 +22,11 @@ void print_count(int width, int height)
 void print_maze(int width, int height, mpz_t index)
 {
     maze_t *maze = maze_by_index(width, height, index);
-    
-    // XXXX
-    
+    if (!maze) {
+        fprintf(stderr, "Index number out of range\n");
+        exit(EX_USAGE);
+    }
+    maze_print(maze);
     maze_free(maze);
 }
 

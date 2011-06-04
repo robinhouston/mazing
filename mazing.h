@@ -1,13 +1,21 @@
 typedef struct {
+    mpz_t ov; /* original value */
+    mpz_t bv; /* value after running Bareiss algorithm */
+} ent_t;
+
+typedef struct {
     int offset;
-    mpz_t entries[];
+    ent_t entries[];
 } row_t;
 
-/* An economical representation of a sparse-ish symmetric matrix */
+/* A symmetric band matrix, optimised for progressive determinant computations */
 typedef struct {
-    int n; /* Number of rows in matrix */
+    int n; /* Number of allocated rows in matrix */
     int w; /* Number of elements in each row */
-    mpz_t zero; /* Always zero */
+    int nr; /* Number of active rows (<= number of allocated rows) */
+    int det_start; /* Which element to start computing a sub-determinant */
+    int min_changed; /* Min index of changed element; n if nothing changed */
+    ent_t zero; /* Always zero: used for out-of-band entries */
     row_t *rows[];
 } matrix_t;
 
@@ -25,4 +33,4 @@ typedef struct {
 
 maze_t *maze_by_index(int width, int height, mpz_t index);
 void maze_free(maze_t *maze);
-void test();
+void maze_print(maze_t *maze);

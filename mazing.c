@@ -17,6 +17,7 @@ inline static void swap_ints(int *x, int *y)
     int t = *x; *x = *y; *y = t;
 }
 
+
 /** Chain functions **
 
 Is there a standard name for this data structure? I’m calling it
@@ -57,200 +58,10 @@ static void chain_link(int *chain, int a, int b)
     chain[y] = x;
 }
 
-/** Matrix functions **
 
-matrix_t represents a symmetric band matrix with (big) integer entries.
+/** Maze representation (for output) **/
 
-I was going to explain that in detail, but then I found the wikipedia
-page http://en.wikipedia.org/wiki/Band_matrix which reveals that I am
-not in fact the first person to have thought of representing matrices
-this way.
-
-Each row contains the half-band ending with the row’s diagonal entry.
-The 'w' member is the number of entries in a typical row, i.e.
-1 + the half-bandwidth. The row also has an 'offset', which is
-the column number of its first entry. This is redundant, but
-makes the code simpler.
-*/
-
-/* Allocate a zero matrix with 'num_rows' rows (and columns),
-and a row length of 'row_length', i.e. a half-bandwidth of
-(row_length - 1). */
-matrix_t *matrix_init(int num_rows, int row_length)
-{
-    matrix_t *m = malloc(sizeof(matrix_t) + sizeof(row_t *) * num_rows);
-    
-    m->n = num_rows;
-    m->w = row_length;
-    mpz_init(m->zero);
-    
-    for (int i = 0; i < m->n; i++)
-    {
-        int this_row_len = min(i+1, m->w);
-        row_t *row = m->rows[i] = malloc(sizeof(row_t) + sizeof(mpz_t) * this_row_len);
-        row->offset = i+1 - this_row_len;
-        
-        for (int j=0; j < this_row_len; j++)
-        {
-            mpz_init(row->entries[j]);
-        }
-    }
-    
-    return m;
-}
-
-/* Free the matrix. */
-void matrix_free(matrix_t *m)
-{
-    for (int i=0; i < m->n; i++)
-    {
-        int this_row_len = min(i+1, m->w);
-        row_t *row = m->rows[i];
-        
-        for (int j=0; j < this_row_len; j++)
-        {
-            mpz_clear(row->entries[j]);
-        }
-        
-        free(row);
-    }
-    
-    mpz_clear(m->zero);
-    free(m);
-}
-
-/* Copy the contents of one matrix 'src' to another 'dest' of the same size */
-void matrix_set(matrix_t *dest, matrix_t *src)
-{
-    assert(dest->n == src->n);
-    assert(dest->w == src->w);
-    
-    int n = src->n, w = src->w;
-    for (int i=0; i < n; i++)
-    {
-        int this_row_len = min(i+1, w);
-        row_t *src_row = src->rows[i];
-        row_t *dest_row = dest->rows[i];
-        
-        for (int j=0; j < this_row_len; j++)
-            mpz_set(dest_row->entries[j], src_row->entries[j]);
-    }
-}
-
-/* Get a pointer to the specified entry of the row */
-inline static mpz_t *ent_r(row_t *row, int j)
-{
-    return &row->entries[j - row->offset];
-}
-/* Get a pointer to the (i,j)th entry, assuming i >= j */
-inline static mpz_t *ent(matrix_t *m, int i, int j)
-{
-    row_t *row = m->rows[i];
-    if (j < row->offset)
-        return &m->zero;
-    return ent_r(row, j);
-}
-/* Get a pointer to the (i,j)th entry */
-inline static mpz_t *ent_eo(matrix_t *m, int i, int j)
-{
-    return (i < j) ? ent(m,j,i) : ent(m,i,j);
-}
-
-/* The Laplacian matrix for a 'width' x 'height' grid. */
-matrix_t *grid_matrix(int width, int height)
-{
-    int n = width * height;
-    matrix_t *m = matrix_init(n, width + 1);
-    
-    for (int i = 0; i < n; i++)
-    {
-        row_t *row = m->rows[i];
-        int r = i / width;
-        int c = i % width;
-        bool first_row = (r == 0);
-        bool last_row = (r == height - 1);
-        bool first_col = (c == 0);
-        bool last_col = (c == width - 1);
-        
-        int num_neighbours = (int) !first_row + (int) !last_row
-                           + (int) !first_col + (int) !last_col;
-        
-        mpz_set_si(*ent_r(row, i), num_neighbours);
-        if (!first_row) mpz_set_si(row->entries[i - width - row->offset], -1);
-        if (!first_col) mpz_set_si(row->entries[i - 1 - row->offset], -1);
-    }
-    
-    return m;
-}
-
-/* Print the matrix to stdout: useful for debugging */
-static void matrix_print(matrix_t *m, char *name)
-{
-    printf("=== %s ===\n", name);
-    for (int i = 0; i < m->n; i++)
-    {
-        for (int j = 0; j <= i; j++)
-        {
-            gmp_printf("%2Zd ", *ent(m, i, j));
-        }
-        fputc('\n', stdout);
-    }
-    fputc('\n', stdout);
-}
-
-/** Maze finding **
-
-Find a maze by index, descending the tree guided by index
-and weighing the branches using what is essentially
-the exact determinant algorithm of Bareiss, but avoiding
-unnecessary calculations with two tricks:
-
-1. The algorithm itself takes advantage of the band matrix
-   structure, so that instead of needing O(n^3) operations,
-   as the ordinary Bareiss algorithm does, it needs only
-   O(n * w^2) where w is the band width. (The symmetry also
-   saves a constant factor of 2^3, of course.)
-
-2. Since we need determinants of similar matrices in succession,
-   it is wasteful to recalculate the whole Bareiss matrix every time.
-   Instead we just recompute the part that has changed.
-
-*/
-void matrix_count_trees(matrix_t *m, int start_node, int end_node)
-{
-    int n = m->n, w = m->w;
-    mpz_t *mkk=0, *mkk_prev=0;
-    
-    for (int k=start_node; k < end_node - 1; k++)
-    {
-        mkk_prev = mkk;
-        mkk = ent(m,k,k);
-        for (int i = k+1; i < min(n, k+w); i++)
-        {
-            row_t *row_i = m->rows[i];
-            mpz_t *mik = ent(m,i,k);
-            for (int j = max(k+1, row_i->offset); j <= i; j++)
-            {
-                mpz_t *mjk = ent(m,j,k);
-                mpz_t *mij = ent_r(row_i,j);
-                
-                mpz_mul(*mij, *mij, *mkk);
-                mpz_submul(*mij, *mik, *mjk);
-                if (mkk_prev) mpz_divexact(*mij, *mij, *mkk_prev);
-            }
-        }
-        if (k+w < n) {
-            int i = k+w;
-            row_t *row_i = m->rows[i];
-            for (int j = max(k+1, row_i->offset); j <= i; j++)
-            {
-                mpz_t *mij = ent_r(row_i,j);
-                mpz_mul(*mij, *mij, *mkk);
-            }
-        }
-    }
-}
-
+/* Create a maze of 'width'x'height cells */
 maze_t *maze_init(int width, int height)
 {
     int n = width * height;
@@ -263,135 +74,13 @@ maze_t *maze_init(int width, int height)
     return maze;
 }
 
+/* Free the maze */
 void maze_free(maze_t *maze)
 {
     free(maze);
 }
 
-static void recompute(matrix_t *m, matrix_t *im, int from, int to)
-{
-    mpz_t *mkk_prev;
-    
-    printf("recompute(from=%d, to=%d)\n", from, to);
-    
-    for (int i = from; i < to; i++)
-        for (int j = from; j <= i; j++)
-            mpz_set(*ent(m,i,j), *ent(im,i,j));
-    
-    matrix_print(m, "m, modified with im");
-    
-    if (from >= m->w)
-    {
-        int k = from - m->w;
-        mpz_t *mkk = ent(m,k,k);
-        
-        for (int i = from; i < to; i++)
-            for (int j = from; j <= i; j++)
-            {
-                mpz_t *mij = ent(m,i,j);
-                mpz_mul(*mij, *mij, *mkk);
-                printf("m[%d][%d] *= m[%d][%d]\n", i,j, k,k);
-            }
-        
-        mkk_prev = mkk;
-    }
-    else
-        mkk_prev = 0;
-    
-    for (int k = max(1, from - m->w); k < to; k++)
-    {
-        mpz_t *mkk = ent(m,k,k);
-        for (int i = max(from, k+1); i < to; i++)
-        {
-            mpz_t *mik = ent(m,i,k);
-            for (int j = max(from, k+1); j <= i; j++)
-            {
-                mpz_t *mij = ent(m,i,j);
-                mpz_t *mjk = ent(m,j,k);
-                
-                mpz_mul(*mij, *mij, *mkk);
-                mpz_submul(*mij, *mik, *mjk);
-                if (mkk_prev) mpz_divexact(*mij, *mij, *mkk_prev);
-                
-                if (mkk_prev)
-                    gmp_printf("m[%d][%d] = (m[%d][%d] * m[%d][%d] - m[%d][%d] * m[%d][%d]) / %Zd\n",
-                        i,j, i,j, k,k, i,k, j,k, *mkk_prev);
-                else
-                    printf("m[%d][%d] = m[%d][%d] * m[%d][%d] - m[%d][%d] * m[%d][%d]\n",
-                        i,j, i,j, k,k, i,k, j,k);
-            }
-        }
-        mkk_prev = mkk;
-    }
-    
-    matrix_print(m, "recomputed m");
-    // matrix_set(m, im);
-    // matrix_count_trees(m, 1, to);
-    // matrix_print(m, "from scratch");
-}
-
-static bool try_edge(matrix_t *im, matrix_t *m, mpz_t *index, int *node_chain, int last_node,
-    int from_cell, int to_cell)
-{
-    int n_i = chain_root(node_chain, to_cell);
-    int n_j = chain_root(node_chain, from_cell);
-    
-    if (n_i < n_j) {
-        /* Swap them round so that n_i >= n_j */
-        swap_ints(&n_i, &n_j);
-        swap_ints(&to_cell, &from_cell);
-    }
-    
-    mpz_t *im_ii = ent(im, n_i, n_i);
-    mpz_t *im_ij = ent(im, n_i, n_j);
-    
-    if (mpz_cmp_ui(*im_ij, 0) >= 0)
-    {
-        printf("There aren't any edges %d->%d (%d->%d)\n", from_cell, to_cell, n_j, n_i);
-        return false;
-    }
-    
-    mpz_t *im_jj = ent(im, n_j, n_j);
-    mpz_t *count_wo_edge = ent(m,last_node-1,last_node-1);
-    
-    //gmp_printf("Testing edge %d -> %d\n", from_cell, to_cell);
-    
-    /* How many mazes are there without this edge? */
-    mpz_sub_ui(*im_ii, *im_ii, 1);
-    mpz_sub_ui(*im_jj, *im_jj, 1);
-    mpz_add_ui(*im_ij, *im_ij, 1);
-    
-    matrix_print(im, "im, just before computing m");
-    recompute(m, im, n_j, last_node);
-    gmp_printf("without (%d, %d) there are %Zd (index = %Zd)\n", from_cell, to_cell, *count_wo_edge, *index);
-    
-    if (mpz_cmp(*index, *count_wo_edge) < 0)
-    {
-        /* Don’t include the edge */
-        return false;
-    }
-    else
-    {
-        /* Do include it */
-        int start_node = max(0, n_j - m->w + 1);
-        int end_node = min(m->n, n_i + m->w);
-        
-        mpz_add(*im_jj, *im_jj, *im_ii);
-        mpz_add(*im_jj, *im_jj, *im_ij);
-        printf("Zapping row %d\n", n_i);
-        for (int k = start_node; k < end_node; k++)
-        {
-            if (k != n_i)
-                mpz_add(*ent_eo(im,n_j,k), *ent_eo(im,n_j,k), *ent_eo(im,n_i,k));
-            mpz_set_ui(*ent_eo(im,n_i,k), (k==n_i ? 1 : 0));
-        }
-        mpz_sub(*index, *index, *count_wo_edge);
-        printf("Linking %d and %d\n", n_i, n_j);
-        chain_link(node_chain, n_i, n_j);
-        return true;
-    }
-}
-
+/* Print the maze to stdout, in ascii art style */
 void maze_print(maze_t *maze)
 {
     int w = maze->width, h = maze->height;
@@ -417,10 +106,336 @@ void maze_print(maze_t *maze)
     printf("\n\n");
 }
 
+/** Matrix functions **
+
+matrix_t represents a symmetric band matrix with (big) integer entries.
+Actually each cell contains two integers: the actual value in that cell
+is in the 'ov' member of ent_t, and the 'bv' member is used for the
+determinant computations described in the "Determinant computation" section.
+
+Each row contains the half-band ending with the row’s diagonal entry.
+The 'w' member is the number of entries in a typical row, i.e.
+1 + the half-bandwidth. The row also has an 'offset', which is
+the column number of its first entry. This is redundant, but
+makes the code simpler.
+*/
+
+/* Allocate a zero matrix with 'num_rows' rows (and columns),
+and a row length of 'row_length', i.e. a half-bandwidth of
+(row_length - 1). */
+matrix_t *matrix_init(int num_rows, int row_length, int det_start)
+{
+    matrix_t *m = malloc(sizeof(matrix_t) + sizeof(row_t *) * num_rows);
+    
+    m->n = m->nr = num_rows;
+    m->w = row_length;
+    m->det_start = det_start;
+    mpz_init(m->zero.ov);
+    mpz_init(m->zero.bv);
+    
+    for (int i = 0; i < num_rows; i++)
+    {
+        int this_row_len = min(i+1, row_length);
+        row_t *row = m->rows[i] = malloc(sizeof(row_t) + sizeof(ent_t) * this_row_len);
+        row->offset = i+1 - this_row_len;
+        
+        for (int j=0; j < this_row_len; j++)
+        {
+            ent_t *e = &row->entries[j];
+            mpz_init(e->ov);
+            mpz_init(e->bv);
+        }
+    }
+    
+    return m;
+}
+
+/* Free the matrix. */
+void matrix_free(matrix_t *m)
+{
+    for (int i=0; i < m->n; i++)
+    {
+        int this_row_len = min(i+1, m->w);
+        row_t *row = m->rows[i];
+        
+        for (int j=0; j < this_row_len; j++)
+        {
+            mpz_clear(row->entries[j].ov);
+            mpz_clear(row->entries[j].bv);
+        }
+        
+        free(row);
+    }
+    
+    mpz_clear(m->zero.ov);
+    mpz_clear(m->zero.bv);
+    free(m);
+}
+
+/* Get a pointer to the specified entry of the row */
+inline static ent_t *ent_r(row_t *row, int j)
+{
+    return &row->entries[j - row->offset];
+}
+/* Get a pointer to the (i,j)th entry, assuming i >= j */
+inline static ent_t *ent(matrix_t *m, int i, int j)
+{
+    row_t *row = m->rows[i];
+    if (j < row->offset)
+        return &m->zero;
+    return ent_r(row, j);
+}
+/* Get a pointer to the (i,j)th entry */
+inline static ent_t *ent_eo(matrix_t *m, int i, int j)
+{
+    return (i < j) ? ent(m,j,i) : ent(m,i,j);
+}
+
+/* The Laplacian matrix for a 'width' x 'height' grid. */
+matrix_t *grid_matrix(int width, int height)
+{
+    int n = width * height;
+    matrix_t *m = matrix_init(n, width + 1, 1);
+    
+    for (int i = 0; i < n; i++)
+    {
+        row_t *row = m->rows[i];
+        int r = i / width;
+        int c = i % width;
+        bool first_row = (r == 0);
+        bool last_row = (r == height - 1);
+        bool first_col = (c == 0);
+        bool last_col = (c == width - 1);
+        
+        int num_neighbours = (int) !first_row + (int) !last_row
+                           + (int) !first_col + (int) !last_col;
+        
+        mpz_set_si(ent_r(row, i)->ov, num_neighbours);
+        if (!first_row) mpz_set_si(row->entries[i - width - row->offset].ov, -1);
+        if (!first_col) mpz_set_si(row->entries[i - 1 - row->offset].ov, -1);
+    }
+    
+    return m;
+}
+
+/* Print the matrix to stdout: useful for debugging */
+static void matrix_print(matrix_t *m, char *name)
+{
+    printf("=== %s ===\n", name);
+    for (int i = 0; i < m->nr; i++)
+    {
+        for (int j = 0; j <= i; j++)
+        {
+            ent_t *e = ent(m, i, j);
+            gmp_printf("%2Zd,%2Zd ", e->ov, e->bv);
+        }
+        fputc('\n', stdout);
+    }
+    fputc('\n', stdout);
+}
+
+
+/** Determinant computation **
+
+We use the exact determinant algorithm of Bareiss, avoiding
+unnecessary calculations with two tricks:
+
+1. The algorithm itself takes advantage of the band matrix
+   structure, so that instead of needing O(n^3) operations,
+   as the ordinary Bareiss algorithm does, it needs only
+   O(n * w^2) where w is the band width. (The symmetry also
+   saves a constant factor of 2^3, of course.)
+
+2. Since we need determinants of similar matrices in succession,
+   it is wasteful to recalculate the whole Bareiss matrix every time:
+   instead we just recompute the part that has changed.
+
+*/
+
+/* Compute the Bareiss matrix, initially */
+static void det_init(matrix_t *m)
+{
+    int n = m->nr, w = m->w;
+    
+    /* Copy the original matrix to the Bareiss matrix */
+    for (int i=0; i < n; i++)
+    {
+        int this_row_len = min(i+1, w);
+        row_t *row = m->rows[i];
+        
+        for (int j=0; j < this_row_len; j++)
+        {
+            ent_t *e = &row->entries[j];
+            mpz_set(e->bv, e->ov);
+        }
+    }
+    
+    /* Now run the Bareiss algorithm */
+    ent_t *mkk=0, *mkk_prev=0;
+    for (int k=m->det_start; k < n - 1; k++)
+    {
+        mkk_prev = mkk;
+        mkk = ent(m,k,k);
+        for (int i = k+1; i < min(n, k+w); i++)
+        {
+            row_t *row_i = m->rows[i];
+            ent_t *mik = ent(m,i,k);
+            for (int j = max(k+1, row_i->offset); j <= i; j++)
+            {
+                ent_t *mjk = ent(m,j,k);
+                ent_t *mij = ent_r(row_i,j);
+                
+                mpz_mul(mij->bv, mij->bv, mkk->bv);
+                mpz_submul(mij->bv, mik->bv, mjk->bv);
+                if (mkk_prev) mpz_divexact(mij->bv, mij->bv, mkk_prev->bv);
+            }
+        }
+        if (k+w < n) {
+            int i = k+w;
+            row_t *row_i = m->rows[i];
+            for (int j = max(k+1, row_i->offset); j <= i; j++)
+            {
+                ent_t *mij = ent_r(row_i,j);
+                mpz_mul(mij->bv, mij->bv, mkk->bv);
+            }
+        }
+    }
+    
+    /* Nothing has changed since we last recalculated */
+    m->min_changed = m->n;
+}
+
+inline static void det_changed(matrix_t *m, int i, int j)
+{
+    int x = min(i,j);
+    if (x < m->min_changed) m->min_changed = x;
+}
+
+/* Update the Bareiss matrix to account for changes to the underlying matrix */
+static void det_update(matrix_t *m)
+{
+    for (int i = m->min_changed; i < m->nr; i++)
+        for (int j = m->min_changed; j <= i; j++) {
+            ent_t *e = ent(m,i,j);
+            mpz_set(e->bv, e->ov);
+        }
+    
+    ent_t *mkk_prev;
+    if (m->min_changed >= m->w)
+    {
+        int k = m->min_changed - m->w;
+        ent_t *mkk = ent(m,k,k);
+        
+        for (int i = m->min_changed; i < m->nr; i++)
+            for (int j = m->min_changed; j <= i; j++)
+            {
+                mpz_t *mij = &ent(m,i,j)->bv;
+                mpz_mul(*mij, *mij, mkk->bv);
+            }
+        
+        mkk_prev = mkk;
+    }
+    else
+        mkk_prev = 0;
+    
+    for (int k = max(m->det_start, m->min_changed - m->w); k < m->nr; k++)
+    {
+        ent_t *mkk = ent(m,k,k);
+        for (int i = max(m->min_changed, k+1); i < m->nr; i++)
+        {
+            ent_t *mik = ent(m,i,k);
+            for (int j = max(m->min_changed, k+1); j <= i; j++)
+            {
+                ent_t *mij = ent(m,i,j);
+                ent_t *mjk = ent(m,j,k);
+                
+                mpz_mul(mij->bv, mij->bv, mkk->bv);
+                mpz_submul(mij->bv, mik->bv, mjk->bv);
+                if (mkk_prev) mpz_divexact(mij->bv, mij->bv, mkk_prev->bv);
+            }
+        }
+        mkk_prev = mkk;
+    }
+    
+    /* Nothing has changed since we last recalculated */
+    m->min_changed = m->n;
+}
+
+/** Maze finding **
+
+*/
+
+/* Decide which branch of the tree to descend down */
+static bool try_edge(matrix_t *m, mpz_t *index, int *node_chain,
+    int from_cell, int to_cell)
+{
+    int n_i = chain_root(node_chain, to_cell);
+    int n_j = chain_root(node_chain, from_cell);
+    
+    if (n_i < n_j) {
+        /* Swap them round so that n_i >= n_j */
+        swap_ints(&n_i, &n_j);
+        swap_ints(&to_cell, &from_cell);
+    }
+    
+    ent_t *m_ii = ent(m, n_i, n_i);
+    ent_t *m_ij = ent(m, n_i, n_j);
+    
+    if (mpz_cmp_ui(m_ij->ov, 0) >= 0)
+    {
+        // from_cell is already connected to to_cell
+        return false;
+    }
+    
+    ent_t *m_jj = ent(m, n_j, n_j);
+    mpz_t *count_wo_edge = &ent(m, m->nr - 1, m->nr - 1)->bv;
+    
+    /* How many mazes are there without this edge? */
+    mpz_sub_ui(m_ii->ov, m_ii->ov, 1);
+    mpz_sub_ui(m_jj->ov, m_jj->ov, 1);
+    mpz_add_ui(m_ij->ov, m_ij->ov, 1);
+    det_changed(m, n_j, n_i);
+    det_update(m);
+    
+    if (mpz_cmp(*index, *count_wo_edge) < 0)
+    {
+        /* Don’t include the edge */
+        return false;
+    }
+    else
+    {
+        /* Do include it */
+        int start_node = max(0, n_j - m->w + 1);
+        int end_node = min(m->n, n_i + m->w);
+        
+        mpz_add(m_jj->ov, m_jj->ov, m_ii->ov);
+        mpz_add(m_jj->ov, m_jj->ov, m_ij->ov);
+        det_changed(m, n_j, n_i);
+        
+        for (int k = start_node; k < end_node; k++)
+        {
+            mpz_t *n_ik = &ent_eo(m,n_i,k)->ov;
+            if (k != n_i && mpz_cmp_ui(*n_ik, 0) != 0) {
+                mpz_t *n_jk = &ent_eo(m,n_j,k)->ov;
+                mpz_add(*n_jk, *n_jk, *n_ik);
+                det_changed(m,n_j,k);
+            }
+            
+            int new_value = (k==n_i ? 1 : 0);
+            if (mpz_cmp_ui(*n_ik, new_value) != 0) {
+                mpz_set_ui(*n_ik, new_value);
+                det_changed(m,n_i,k);
+            }
+        }
+        mpz_sub(*index, *index, *count_wo_edge);
+        chain_link(node_chain, n_i, n_j);
+        return true;
+    }
+}
+
 maze_t *maze_by_index(int width, int height, mpz_t index_in)
 {
     mpz_t index;
-    matrix_t *im = grid_matrix(width, height);
     matrix_t *m = grid_matrix(width, height);
     int n = m->n;
     maze_t *maze = maze_init(width, height);
@@ -428,105 +443,39 @@ maze_t *maze_by_index(int width, int height, mpz_t index_in)
     
     mpz_init_set(index, index_in);
     
-    matrix_count_trees(m, 1, n);
+    det_init(m);
     
     for (int i = n - 1; i > 0; i--)
     {
+        m->nr = i + 1;
+        
         if (i >= width)
         {
             /* Not on the top row */
-            if (try_edge(im, m, &index, node_chain, i+1, i - width, i))
+            if (try_edge(m, &index, node_chain, i - width, i))
             {
                 maze->conn[i-width] |= DIR_S;
                 maze->conn[i] |= DIR_N;
-                printf("...including edge %d->%d\n", i - width, i);
             }
-            //matrix_print(im, "im");
-            maze_print(maze);
         }
         
         if (i % width)
         {
             /* Not in the leftmost column */
-            if (try_edge(im, m, &index, node_chain, i+1, i - 1, i))
+            if (try_edge(m, &index, node_chain, i - 1, i))
             {
                 maze->conn[i-1] |= DIR_E;
                 maze->conn[i] |= DIR_W;
-                printf("...including edge %d->%d\n", i - 1, i);
             }
-            //matrix_print(im, "im");
-            maze_print(maze);
         }
     }
     if (mpz_cmp_ui(index, 0) != 0)
     {
-        gmp_printf("!! index == %Zd\n", index);
+        return 0;
     }
     
     matrix_free(m);
-    matrix_free(im);
     mpz_clear(index);
     chain_free(node_chain);
     return maze;
-}
-
-
-matrix_t *maze_matrix(int width, int height)
-{
-    matrix_t *m = grid_matrix(width, height);
-    matrix_count_trees(m, 0, m->n);
-    return m;
-}
-
-/*
- 2 
--1  3 
- 0 -1  5 
--1  0  0 15 
- 0 -1 -1 -5  3 
- 0  0 -3  0  0  1 
- 0  0  0 -5  0  0  1 
-
- 2 
--1  3 
- 0 -1  2 
--1  0  0  3 
- 0 -1 -1 -1  3 
- 0  0  0  0  0  1 
- 0  0  0 -1  0  0  1 
-*/
-void test()
-{
-    matrix_t *im = matrix_init(8,4);
-    matrix_t *m = matrix_init(8,4);
-    
-    mpz_set_si(*ent(m,0,0), 2);
-    
-    mpz_set_si(*ent(m,1,0), -1);
-    mpz_set_si(*ent(m,1,1), 3);
-    
-    mpz_set_si(*ent(m,2,1), -1);
-    mpz_set_si(*ent(m,2,2), 5);
-    
-    mpz_set_si(*ent(m,3,0), -1);
-    mpz_set_si(*ent(m,3,3), 15);
-    
-    mpz_set_si(*ent(m,4,1), -1);
-    mpz_set_si(*ent(m,4,2), -1);
-    mpz_set_si(*ent(m,4,3), -5);
-    mpz_set_si(*ent(m,4,4), 3);
-
-    mpz_set_si(*ent(m,5,2), -3);
-    mpz_set_si(*ent(m,5,5), 1);
-
-    mpz_set_si(*ent(m,6,3), -5);
-    mpz_set_si(*ent(m,6,6), 1);
-    
-    matrix_print(m, "m");
-    matrix_set(im, m);
-    recompute(m, im, 4, 7);
-    matrix_print(m, "result");
-    
-    matrix_free(im);
-    matrix_free(m);
 }
