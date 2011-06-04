@@ -363,6 +363,9 @@ static void det_update(matrix_t *m)
 
 /** Maze finding **
 
+The actual maze finding algorithm, descending the binary tree
+determined by the edges of the graph to find the maze that has
+a particular index in the in-order traversal.
 */
 
 /* Decide which branch of the tree to descend down */
@@ -383,7 +386,7 @@ static bool try_edge(matrix_t *m, mpz_t *index, int *node_chain,
     
     if (mpz_cmp_ui(m_ij->ov, 0) >= 0)
     {
-        // from_cell is already connected to to_cell
+        /* from_cell is already connected to to_cell */
         return false;
     }
     
@@ -433,6 +436,11 @@ static bool try_edge(matrix_t *m, mpz_t *index, int *node_chain,
     }
 }
 
+/* Return the 'index_in'th maze on a 'width'x'height' grid.
+
+If index_in is out of range, returns NULL. (The quickest way
+to find out the allowed range is to use the Fast Maze Counter
+defined in fmc.c) */
 maze_t *maze_by_index(int width, int height, mpz_t index_in)
 {
     mpz_t index;
