@@ -218,7 +218,7 @@ matrix_t *grid_matrix(int width, int height)
     return m;
 }
 
-/* Print the matrix to stdout: useful for debugging */
+/* Print the matrix to stdout: useful for debugging *
 static void matrix_print(matrix_t *m, char *name)
 {
     printf("=== %s ===\n", name);
@@ -233,7 +233,7 @@ static void matrix_print(matrix_t *m, char *name)
     }
     fputc('\n', stdout);
 }
-
+*/
 
 /** Determinant computation **
 
