@@ -1,4 +1,3 @@
 find_path(GMP_INCLUDE_DIR NAMES gmp.h)
-find_library(GMP_LIBRARIES NAMES gmp libgmp)
-include_directories(${GMP_INCLUDE_DIR})
-
+find_library(GMP_LIBRARY NAMES gmp libgmp)
+set(GMP_LIBRARIES ${GMP_LIBRARY})

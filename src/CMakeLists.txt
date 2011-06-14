@@ -16,28 +16,29 @@ set(CMAKE_C_FLAGS -std=c99)
 # We need GMP
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_BINARY_DIR}/CMakeModules")
 find_package(GMP REQUIRED)
+include_directories(${GMP_INCLUDE_DIR})
 
 # The "exe" target builds the mazing executable
 add_executable(exe main.c mazing.c fmc.c)
 target_link_libraries(exe ${GMP_LIBRARIES})
 set_target_properties(exe PROPERTIES OUTPUT_NAME mazing)
 
-# 
+# Source and header files that make up the mazing library
 set(LIB_SOURCES mazing.c fmc.c)
 set(LIB_HEADERS mazing.h fmc.h)
 
 # The "static" target builds the static library
-add_library(static STATIC ${LIB_SOURCES} ${LIB_HEADERS})
+add_library(static STATIC ${LIB_SOURCES})
 target_link_libraries(static ${GMP_LIBRARIES})
-set_target_properties(static PROPERTIES OUTPUT_NAME mazing)
+set_target_properties(static PROPERTIES OUTPUT_NAME mazing PUBLIC_HEADER "mazing.h;fmc.h")
 
 # The "shared" target builds the shared library
-add_library(shared SHARED mazing.c fmc.c)
+add_library(shared SHARED ${LIB_SOURCES})
 target_link_libraries(shared ${GMP_LIBRARIES})
-set_target_properties(shared PROPERTIES OUTPUT_NAME mazing)
+set_target_properties(shared PROPERTIES OUTPUT_NAME mazing PUBLIC_HEADER "mazing.h;fmc.h")
 
 install(TARGETS exe RUNTIME DESTINATION /usr/local/bin)
 install(TARGETS static shared
     ARCHIVE DESTINATION /usr/local/lib
     LIBRARY DESTINATION /usr/local/lib
-    PUBLIC_HEADER DESTINATION /usr/local/include)
+    PUBLIC_HEADER DESTINATION /usr/local/include/mazing)
