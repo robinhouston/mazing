@@ -4,3 +4,6 @@ CMakeFiles
 Makefile
 
 mazing
+libmazing.*
+
+install_manifest.txt
