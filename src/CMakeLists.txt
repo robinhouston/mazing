@@ -37,8 +37,8 @@ add_library(shared SHARED ${LIB_SOURCES})
 target_link_libraries(shared ${GMP_LIBRARIES})
 set_target_properties(shared PROPERTIES OUTPUT_NAME mazing PUBLIC_HEADER "mazing.h;fmc.h")
 
-install(TARGETS exe RUNTIME DESTINATION /usr/local/bin)
+install(TARGETS exe RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
 install(TARGETS static shared
-    ARCHIVE DESTINATION /usr/local/lib
-    LIBRARY DESTINATION /usr/local/lib
-    PUBLIC_HEADER DESTINATION /usr/local/include/mazing)
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+    PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_PREFIX}/include/mazing")
